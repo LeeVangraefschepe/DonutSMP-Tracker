@@ -1,0 +1,6 @@
+@DonutSMP_HostAddress = http://localhost:5244
+
+GET {{DonutSMP_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
