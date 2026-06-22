@@ -12,6 +12,8 @@ public record PriceHistoryPoint(DateTimeOffset Timestamp, double Price, int Amou
 public record SellerSummary(string Name, long SaleCount);
 public record LiveSale(string ItemName, string Seller, double UnitPrice, int Amount, DateTimeOffset Timestamp);
 
+public record OverrideHistoryPoint(int Id, double? Price, DateTimeOffset Timestamp);
+
 public record RecipeIngredient(string Item, string Qty, bool? UseOverride = null);
 public record RecipeOutput(string Item, string Qty, bool? UseOverride = null);
 public record Recipe(string Id, string Name, string Category, RecipeOutput Output, RecipeIngredient[] Ingredients);

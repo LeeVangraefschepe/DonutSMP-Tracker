@@ -37,3 +37,11 @@ public class ManualItem
 {
     public string ItemName { get; set; } = "";
 }
+
+public class PriceOverrideHistory
+{
+    public int Id { get; set; }
+    public string ItemName { get; set; } = "";
+    public double? Price { get; set; }  // null = override was cleared
+    public long TimestampMs { get; set; }
+}

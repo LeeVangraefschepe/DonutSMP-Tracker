@@ -75,6 +75,10 @@ function render() {
                     onclick="editOverride('${i.name}')">
                     <i class="bi bi-pencil-square"></i>
                 </button>
+                <button class="btn btn-sm btn-icon btn-outline-secondary ms-1"
+                    onclick="showOverrideHistory('${i.name}')" title="Override history">
+                    <i class="bi bi-clock-history"></i>
+                </button>
                 <button class="btn btn-sm btn-icon btn-outline-danger ms-1"
                     onclick="removeItem('${i.name}')">
                     <i class="bi bi-trash"></i>
@@ -299,6 +303,47 @@ async function editOverride(itemName) {
         if (item) item.overridePrice = price;
     }
     render();
+}
+
+const overrideHistoryModal = new bootstrap.Modal(document.getElementById('overrideHistoryModal'));
+let overrideHistoryItem = '';
+
+async function showOverrideHistory(itemName) {
+    overrideHistoryItem = itemName;
+    document.getElementById('overrideHistoryTitle').textContent = formatName(itemName) + ' — Override History';
+    document.getElementById('overrideHistoryBody').innerHTML =
+        '<tr><td colspan="3" class="text-center text-muted py-3">Loading…</td></tr>';
+    overrideHistoryModal.show();
+    await refreshOverrideHistory();
+}
+
+async function refreshOverrideHistory() {
+    const res = await fetch(`/api/prices/overrides/${encodeURIComponent(overrideHistoryItem)}/history`);
+    const history = await res.json();
+    const body = document.getElementById('overrideHistoryBody');
+    if (history.length === 0) {
+        body.innerHTML = '<tr><td colspan="3" class="text-center text-muted py-3">No history yet.</td></tr>';
+        return;
+    }
+    body.innerHTML = history.map(h => `
+        <tr>
+            <td class="ps-3 text-muted small" style="white-space:nowrap">${new Date(h.timestamp).toLocaleString()}</td>
+            <td>${h.price != null
+                ? `<span class="text-warning fw-semibold">${fmt(h.price)}</span>`
+                : '<span class="text-muted fst-italic small">Cleared</span>'}</td>
+            <td class="pe-2 text-end">
+                <button class="btn btn-sm btn-icon btn-outline-danger"
+                    onclick="deleteOverrideHistoryEntry(${h.id})" title="Delete this record">
+                    <i class="bi bi-trash"></i>
+                </button>
+            </td>
+        </tr>
+    `).join('');
+}
+
+async function deleteOverrideHistoryEntry(id) {
+    await fetch(`/api/prices/overrides/history/${id}`, { method: 'DELETE' });
+    await refreshOverrideHistory();
 }
 
 // ── Recipes ──────────────────────────────────────────────────────────────────

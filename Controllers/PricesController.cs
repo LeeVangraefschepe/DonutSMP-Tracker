@@ -72,6 +72,13 @@ public class PricesController : ControllerBase
             existing.Price = price;
         else
             db.PriceOverrides.Add(new PriceOverride { ItemName = itemName, Price = price });
+
+        db.PriceOverrideHistories.Add(new PriceOverrideHistory
+        {
+            ItemName = itemName,
+            Price = price,
+            TimestampMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()
+        });
         await db.SaveChangesAsync();
 
         return NoContent();
@@ -87,9 +94,40 @@ public class PricesController : ControllerBase
         if (entity != null)
         {
             db.PriceOverrides.Remove(entity);
+            db.PriceOverrideHistories.Add(new PriceOverrideHistory
+            {
+                ItemName = itemName,
+                Price = null,
+                TimestampMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()
+            });
             await db.SaveChangesAsync();
         }
 
+        return NoContent();
+    }
+
+    [HttpGet("overrides/{itemName}/history")]
+    public async Task<IReadOnlyList<OverrideHistoryPoint>> GetOverrideHistory(string itemName)
+    {
+        await using var db = await dbFactory.CreateDbContextAsync();
+        return await db.PriceOverrideHistories
+            .Where(h => h.ItemName == itemName)
+            .OrderByDescending(h => h.TimestampMs)
+            .Select(h => new OverrideHistoryPoint(
+                h.Id,
+                h.Price,
+                DateTimeOffset.FromUnixTimeMilliseconds(h.TimestampMs)))
+            .ToListAsync();
+    }
+
+    [HttpDelete("overrides/history/{id:int}")]
+    public async Task<IActionResult> DeleteOverrideHistoryEntry(int id)
+    {
+        await using var db = await dbFactory.CreateDbContextAsync();
+        var entry = await db.PriceOverrideHistories.FindAsync(id);
+        if (entry == null) return NotFound();
+        db.PriceOverrideHistories.Remove(entry);
+        await db.SaveChangesAsync();
         return NoContent();
     }
 }

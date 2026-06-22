@@ -9,6 +9,7 @@ public class DonutDbContext : DbContext
     public DbSet<StoredRecipe> Recipes => Set<StoredRecipe>();
     public DbSet<ProcessedTransaction> ProcessedTransactions => Set<ProcessedTransaction>();
     public DbSet<ManualItem> ManualItems => Set<ManualItem>();
+    public DbSet<PriceOverrideHistory> PriceOverrideHistories => Set<PriceOverrideHistory>();
 
     public DonutDbContext(DbContextOptions<DonutDbContext> options) : base(options) { }
 

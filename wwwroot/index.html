@@ -94,7 +94,7 @@
                 <th class="sortable" data-col="maxPrice">Max Price <i class="bi bi-arrow-down-up ms-1"></i></th>
                 <th class="sortable" data-col="amountRecorded">Volume <i class="bi bi-arrow-down-up ms-1"></i></th>
                 <th class="sortable" data-col="recordCount">Sales <i class="bi bi-arrow-down-up ms-1"></i></th>
-                <th>Override</th>
+                <th class="sortable" data-col="overridePrice">Override <i class="bi bi-arrow-down-up ms-1"></i></th>
               </tr>
             </thead>
             <tbody id="itemsBody">
@@ -173,6 +173,32 @@
         <div class="chart-container" style="height:320px">
           <canvas id="priceChart"></canvas>
         </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Override history modal -->
+<div class="modal fade" id="overrideHistoryModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="overrideHistoryTitle">Override History</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body p-0">
+        <table class="table table-sm align-middle mb-0">
+          <thead>
+            <tr>
+              <th class="ps-3">Time</th>
+              <th>Price</th>
+              <th style="width:3rem"></th>
+            </tr>
+          </thead>
+          <tbody id="overrideHistoryBody">
+            <tr><td colspan="3" class="text-center text-muted py-3">Loading…</td></tr>
+          </tbody>
+        </table>
       </div>
     </div>
   </div>

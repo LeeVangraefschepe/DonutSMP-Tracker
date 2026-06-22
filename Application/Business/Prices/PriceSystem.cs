@@ -130,6 +130,15 @@ public class PriceSystem : BackgroundService
         try { await db.Database.ExecuteSqlRawAsync("ALTER TABLE \"Recipes\" ADD COLUMN \"OutputUseOverride\" INTEGER DEFAULT NULL", stoppingToken); }
         catch { /* column already exists */ }
 
+        await db.Database.ExecuteSqlRawAsync("""
+            CREATE TABLE IF NOT EXISTS "PriceOverrideHistories" (
+                "Id"          INTEGER NOT NULL CONSTRAINT "PK_PriceOverrideHistories" PRIMARY KEY AUTOINCREMENT,
+                "ItemName"    TEXT    NOT NULL,
+                "Price"       REAL    NULL,
+                "TimestampMs" INTEGER NOT NULL
+            )
+            """, stoppingToken);
+
         var cutoff = DateTimeOffset.UtcNow.AddDays(-7).ToUnixTimeMilliseconds();
 
         var priceRecords = await db.PriceRecords
