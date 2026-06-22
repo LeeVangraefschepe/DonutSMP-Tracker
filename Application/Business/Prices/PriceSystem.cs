@@ -118,18 +118,19 @@ public class PriceSystem : BackgroundService
     {
         await using var db = await dbFactory.CreateDbContextAsync(stoppingToken);
 
-        // Databases created before EF migrations were introduced (via EnsureCreated) have
-        // no __EFMigrationsHistory table. Bootstrap by marking InitialSchema as already
+        // Databases created before EF migrations were introduced (via EnsureCreated) won't
+        // have InitialSchema in their migration history. Bootstrap by marking it as already
         // applied so MigrateAsync doesn't try to recreate tables that already exist.
-        var historyRepo = db.GetService<IHistoryRepository>();
-        if (!await historyRepo.ExistsAsync(stoppingToken))
+        var appliedMigrations = (await db.Database.GetAppliedMigrationsAsync(stoppingToken)).ToHashSet();
+        if (!appliedMigrations.Contains("20260622220930_InitialSchema"))
         {
             var creator = db.GetService<IRelationalDatabaseCreator>();
             if (await creator.HasTablesAsync(stoppingToken))
             {
+                var historyRepo = db.GetService<IHistoryRepository>();
                 await historyRepo.CreateIfNotExistsAsync(stoppingToken);
                 await db.Database.ExecuteSqlRawAsync(
-                    historyRepo.GetInsertScript(new HistoryRow("20240601000000_InitialSchema", "10.0.9")),
+                    historyRepo.GetInsertScript(new HistoryRow("20260622220930_InitialSchema", "10.0.9")),
                     stoppingToken);
             }
         }
