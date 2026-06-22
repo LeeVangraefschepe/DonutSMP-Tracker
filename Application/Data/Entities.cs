@@ -45,3 +45,9 @@ public class PriceOverrideHistory
     public double? Price { get; set; }  // null = override was cleared
     public long TimestampMs { get; set; }
 }
+
+public class FuelItem
+{
+    public string ItemName { get; set; } = "";
+    public double SmeltCount { get; set; }
+}

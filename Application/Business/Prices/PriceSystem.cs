@@ -1,6 +1,9 @@
 using Application.API;
 using Application.Data;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
+using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
@@ -114,30 +117,24 @@ public class PriceSystem : BackgroundService
     private async Task InitializeDatabaseAsync(CancellationToken stoppingToken)
     {
         await using var db = await dbFactory.CreateDbContextAsync(stoppingToken);
-        await db.Database.EnsureCreatedAsync(stoppingToken);
 
-        // EnsureCreated only runs on an empty database; run these to add any tables
-        // or columns that were introduced after the initial schema was created.
-        await db.Database.ExecuteSqlRawAsync("""
-            CREATE TABLE IF NOT EXISTS "ManualItems" (
-                "ItemName" TEXT NOT NULL CONSTRAINT "PK_ManualItems" PRIMARY KEY
-            )
-            """, stoppingToken);
+        // Databases created before EF migrations were introduced (via EnsureCreated) have
+        // no __EFMigrationsHistory table. Bootstrap by marking InitialSchema as already
+        // applied so MigrateAsync doesn't try to recreate tables that already exist.
+        var historyRepo = db.GetService<IHistoryRepository>();
+        if (!await historyRepo.ExistsAsync(stoppingToken))
+        {
+            var creator = db.GetService<IRelationalDatabaseCreator>();
+            if (await creator.HasTablesAsync(stoppingToken))
+            {
+                await historyRepo.CreateIfNotExistsAsync(stoppingToken);
+                await db.Database.ExecuteSqlRawAsync(
+                    historyRepo.GetInsertScript(new HistoryRow("20240601000000_InitialSchema", "10.0.9")),
+                    stoppingToken);
+            }
+        }
 
-        try { await db.Database.ExecuteSqlRawAsync("ALTER TABLE \"Recipes\" ADD COLUMN \"Category\" TEXT NOT NULL DEFAULT ''", stoppingToken); }
-        catch { /* column already exists */ }
-
-        try { await db.Database.ExecuteSqlRawAsync("ALTER TABLE \"Recipes\" ADD COLUMN \"OutputUseOverride\" INTEGER DEFAULT NULL", stoppingToken); }
-        catch { /* column already exists */ }
-
-        await db.Database.ExecuteSqlRawAsync("""
-            CREATE TABLE IF NOT EXISTS "PriceOverrideHistories" (
-                "Id"          INTEGER NOT NULL CONSTRAINT "PK_PriceOverrideHistories" PRIMARY KEY AUTOINCREMENT,
-                "ItemName"    TEXT    NOT NULL,
-                "Price"       REAL    NULL,
-                "TimestampMs" INTEGER NOT NULL
-            )
-            """, stoppingToken);
+        await db.Database.MigrateAsync(stoppingToken);
 
         var cutoff = DateTimeOffset.UtcNow.AddDays(-7).ToUnixTimeMilliseconds();
 

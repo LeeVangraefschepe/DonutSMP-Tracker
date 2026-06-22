@@ -195,11 +195,13 @@ function switchTab(tab, btn) {
     document.getElementById('tab-sellers').classList.toggle('d-none', tab !== 'sellers');
     document.getElementById('tab-live').classList.toggle('d-none', tab !== 'live');
     document.getElementById('tab-recipes').classList.toggle('d-none', tab !== 'recipes');
+    document.getElementById('tab-fuel').classList.toggle('d-none', tab !== 'fuel');
 
     clearInterval(liveInterval);
     if (tab === 'sellers') loadSellers();
     if (tab === 'live') { loadLive(); liveInterval = setInterval(loadLive, 1000); }
     if (tab === 'recipes') loadRecipes();
+    if (tab === 'fuel') loadFuel();
 }
 
 function timeAgo(isoString) {
@@ -849,4 +851,146 @@ async function saveRecipe() {
 async function deleteRecipe(id) {
     await fetch(`/api/recipes/${id}`, { method: 'DELETE' });
     await loadRecipes();
+}
+
+// ── Fuel ──────────────────────────────────────────────────────────────────────
+
+let cachedFuel = [];
+let fuelPriceMode = 'override';
+const fuelModal = new bootstrap.Modal(document.getElementById('fuelModal'));
+
+async function loadFuel() {
+    try {
+        const res = await fetch('/api/fuel');
+        cachedFuel = await res.json();
+        renderFuelControls();
+        renderFuel();
+    } catch {
+        document.getElementById('fuelContainer').innerHTML =
+            '<p class="text-muted text-center py-4">Failed to load fuel items.</p>';
+    }
+}
+
+function getFuelPrice(itemName) {
+    const item = allItems.find(i => i.name === itemName);
+    if (!item) return null;
+    if (fuelPriceMode === 'min') return item.minPrice > 0 ? item.minPrice : null;
+    if (fuelPriceMode === 'max') return item.maxPrice > 0 ? item.maxPrice : null;
+    if (fuelPriceMode === 'override' && item.overridePrice != null) return item.overridePrice;
+    return item.averagePrice > 0 ? item.averagePrice : null;
+}
+
+function setFuelPriceMode(val) { fuelPriceMode = val; renderFuelControls(); renderFuel(); }
+
+function renderFuelControls() {
+    const PRICE_MODES = [
+        { key: 'override', label: 'Override', icon: 'bi-tag-fill',    title: 'Use override prices where set, average otherwise' },
+        { key: 'average',  label: 'Average',  icon: 'bi-bar-chart',   title: 'Use average market prices' },
+        { key: 'min',      label: 'Min',      icon: 'bi-arrow-down',  title: 'Use minimum recorded prices' },
+        { key: 'max',      label: 'Max',      icon: 'bi-arrow-up',    title: 'Use maximum recorded prices' },
+    ];
+    const priceBtns = PRICE_MODES.map(m =>
+        `<button class="btn btn-sm ${fuelPriceMode === m.key ? 'btn-primary' : 'btn-outline-secondary'}"
+            onclick="setFuelPriceMode('${m.key}')" title="${m.title}">
+            <i class="bi ${m.icon} me-1"></i>${m.label}
+        </button>`).join('');
+
+    document.getElementById('fuelControls').innerHTML = `
+        <div class="d-flex align-items-center gap-2">
+            <span class="text-muted small fw-semibold">Prices</span>
+            <div class="d-flex gap-1">${priceBtns}</div>
+        </div>`;
+}
+
+function renderFuel() {
+    const rows = cachedFuel.map(f => {
+        const price = getFuelPrice(f.itemName);
+        const costPerSmelt = price != null ? price / f.smeltCount : null;
+        return { ...f, price, costPerSmelt };
+    }).sort((a, b) => {
+        if (a.costPerSmelt == null && b.costPerSmelt == null) return 0;
+        if (a.costPerSmelt == null) return 1;
+        if (b.costPerSmelt == null) return -1;
+        return a.costPerSmelt - b.costPerSmelt;
+    });
+
+    const container = document.getElementById('fuelContainer');
+    if (rows.length === 0) {
+        container.innerHTML = '<p class="text-muted text-center py-4">No fuel items yet. Click "Add Fuel" to get started.</p>';
+        return;
+    }
+
+    container.innerHTML = `
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead>
+                    <tr>
+                        <th>Item</th>
+                        <th>Smelt Count</th>
+                        <th>Price</th>
+                        <th>Cost / Smelt</th>
+                        <th style="width:5rem"></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${rows.map(r => `
+                        <tr>
+                            <td class="fw-medium">${formatName(r.itemName)}</td>
+                            <td>${r.smeltCount}</td>
+                            <td>${r.price != null ? fmt(r.price) : '<span class="text-muted">—</span>'}</td>
+                            <td class="fw-semibold">${r.costPerSmelt != null ? fmt(r.costPerSmelt) : '<span class="text-muted">—</span>'}</td>
+                            <td>
+                                <button class="btn btn-sm btn-icon btn-outline-secondary"
+                                    onclick="openFuelModal('${r.itemName}', ${r.smeltCount})" title="Edit">
+                                    <i class="bi bi-pencil"></i>
+                                </button>
+                                <button class="btn btn-sm btn-icon btn-outline-danger ms-1"
+                                    onclick="deleteFuelItem('${r.itemName}')" title="Delete">
+                                    <i class="bi bi-trash"></i>
+                                </button>
+                            </td>
+                        </tr>`).join('')}
+                </tbody>
+            </table>
+        </div>`;
+}
+
+function openFuelModal(itemName, smeltCount) {
+    const editing = !!itemName;
+    document.getElementById('fuelModalTitle').textContent = editing ? 'Edit Fuel Item' : 'Add Fuel Item';
+    document.getElementById('fuelEditName').value = itemName || '';
+    document.getElementById('fuelItemName').value = itemName || '';
+    document.getElementById('fuelItemName').disabled = editing;
+    document.getElementById('fuelSmeltCount').value = smeltCount || '';
+    fuelModal.show();
+}
+
+async function saveFuelItem() {
+    const editName = document.getElementById('fuelEditName').value;
+    const itemName = editName || document.getElementById('fuelItemName').value.trim();
+    const smeltCount = parseFloat(document.getElementById('fuelSmeltCount').value);
+    if (!itemName || !smeltCount || smeltCount <= 0) return;
+
+    if (editName) {
+        await fetch(`/api/fuel/${encodeURIComponent(editName)}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(smeltCount)
+        });
+    } else {
+        await fetch('/api/fuel', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ itemName, smeltCount })
+        });
+    }
+
+    fuelModal.hide();
+    await loadFuel();
+}
+
+async function deleteFuelItem(itemName) {
+    if (!confirm(`Remove "${formatName(itemName)}" from the fuel list?`)) return;
+    await fetch(`/api/fuel/${encodeURIComponent(itemName)}`, { method: 'DELETE' });
+    await loadFuel();
 }
