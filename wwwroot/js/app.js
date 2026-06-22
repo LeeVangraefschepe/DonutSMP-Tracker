@@ -50,6 +50,7 @@ function render() {
         let va = a[sortCol], vb = b[sortCol];
         if (sortCol === 'name') { va = formatName(va); vb = formatName(vb); }
         if (typeof va === 'string') return sortAsc ? va.localeCompare(vb) : vb.localeCompare(va);
+        va = va ?? -1; vb = vb ?? -1;
         return sortAsc ? va - vb : vb - va;
     });
 
