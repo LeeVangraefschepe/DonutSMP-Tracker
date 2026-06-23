@@ -416,13 +416,35 @@ function getRecipePrice(itemName, ingUseOverride) {
     return item.averagePrice;
 }
 
+function getCheapestFuel() {
+    let cheapest = null;
+    for (const f of cachedFuel) {
+        const price = getRecipePrice(f.itemName, true);
+        if (!price || price <= 0) continue;
+        const costPerSmelt = price / f.smeltCount;
+        if (!cheapest || costPerSmelt < cheapest.costPerSmelt)
+            cheapest = { itemName: f.itemName, smeltCount: f.smeltCount, price, costPerSmelt };
+    }
+    return cheapest;
+}
+
 function calcRecipe(recipe) {
-    const cost = recipe.ingredients.reduce(
+    const ingredientCost = recipe.ingredients.reduce(
         (sum, ing) => sum + getRecipePrice(ing.item, ing.useOverride !== false) * parseQty(ing.qty), 0);
+
+    let fuelCost = 0;
+    let cheapestFuel = null;
+    if (recipe.category === 'smelting') {
+        cheapestFuel = getCheapestFuel();
+        if (cheapestFuel)
+            fuelCost = cheapestFuel.costPerSmelt * parseQty(recipe.output.qty);
+    }
+
+    const cost = ingredientCost + fuelCost;
     const revenue = getRecipePrice(recipe.output.item, recipe.output.useOverride !== false) * parseQty(recipe.output.qty);
     const profit = revenue - cost;
     const margin = cost > 0 ? (profit / cost) * 100 : 0;
-    return { cost, revenue, profit, margin };
+    return { cost, ingredientCost, fuelCost, cheapestFuel, revenue, profit, margin };
 }
 
 function fmtProfit(profit, margin) {
@@ -561,7 +583,7 @@ function renderRecipes() {
     }
 
     container.innerHTML = recipes.map(r => {
-        const { cost, revenue, profit, margin } = calcRecipe(r);
+        const { cost, fuelCost, cheapestFuel, revenue, profit, margin } = calcRecipe(r);
         const cat      = getCategoryInfo(r.category);
         const expanded = expandedRecipes.has(r.id);
 
@@ -661,6 +683,24 @@ function renderRecipes() {
                     Output: <strong>${formatName(r.output.item)}</strong> × ${outQtyStr}${outOverride ? ' <span class="badge-category">override</span>' : ''}${outPerCraftNote}
                   </div>
                   ${r.ingredients.length ? `<div>${ingRows}</div>` : '<div class="text-muted small fst-italic">No ingredients</div>'}
+                  ${r.category === 'smelting' ? (() => {
+                      if (!cheapestFuel) return `
+                          <div class="d-flex justify-content-between align-items-center gap-3 py-1" style="border-top:1px solid var(--border)">
+                              <span class="small text-muted fst-italic"><i class="bi bi-fire me-1" style="color:#f97316"></i>Fuel — no fuel items configured</span>
+                              <span class="small text-muted">—</span>
+                          </div>`;
+                      const fuelQtyPerCraft = parseQty(r.output.qty) / cheapestFuel.smeltCount;
+                      const displayFuelQty  = showTotals ? fuelQtyPerCraft * multiplier : fuelQtyPerCraft;
+                      const displayFuelCost = showTotals ? fuelCost * multiplier : fuelCost;
+                      const perCraftNote    = showTotals
+                          ? ` <span class="text-muted" style="font-size:.7rem">(${fmtQtyNum(fuelQtyPerCraft)} per craft)</span>`
+                          : '';
+                      return `
+                          <div class="d-flex justify-content-between align-items-center gap-3 py-1" style="border-top:1px solid var(--border)">
+                              <span class="small"><i class="bi bi-fire me-1" style="color:#f97316"></i>${formatName(cheapestFuel.itemName)} × ${fmtQtyNum(displayFuelQty)} <span class="text-muted" style="font-size:.7rem">(${fmt(cheapestFuel.costPerSmelt)} / smelt)</span>${perCraftNote}</span>
+                              <span class="small text-muted" style="white-space:nowrap">${fmt(displayFuelCost)}</span>
+                          </div>`;
+                  })() : ''}
                 </div>
                 ${statPanel}
               </div>
